@@ -2,73 +2,111 @@
 #init
 
 import RPi.GPIO as GPIO
+import pigpio
 import time
 import datetime
 import os
 import random
 import smtplib
 
-#os.system("modprobe w1-gpio")
-#os.system("modprobe w1-therm")
-#temp_sensor = "/sys/bus/w1/devices/28-0416239f59ff/w1_slave"
+pwm = pigpio.pi()
+
+GPIO.setwarnings(False)
 
 #===========================================================================================
 #pin setup
 
-LIGHTS_INSIDE = 38
-LIGHTS_OUTSIDE_M = 40 
-LIGHTS_OUTSIDE_1 = 29
-LIGHTS_OUTSIDE_2 = 31
-LIGHTS_OUTSIDE_3 = 33
-LIGHTS_OUTSIDE_4 = 35
-LIGHTS_OUTSIDE_5 = 37
-MOTION_SENSOR = 7
+DOOR_SENSOR = 40
+
+LInside = 38
+
+LR = 35
+LG = 12 #GPIO not pin number
+LB = 13 #GPIO not pin number
+LW = 37
 
 GPIO.setmode(GPIO.BOARD)
-GPIO.setup(LIGHTS_INSIDE, GPIO.OUT)
-GPIO.setup(LIGHTS_OUTSIDE_M, GPIO.OUT)
-GPIO.setup(LIGHTS_OUTSIDE_1, GPIO.OUT)
-GPIO.setup(LIGHTS_OUTSIDE_2, GPIO.OUT)
-GPIO.setup(LIGHTS_OUTSIDE_3, GPIO.OUT)
-GPIO.setup(LIGHTS_OUTSIDE_4, GPIO.OUT)
-GPIO.setup(LIGHTS_OUTSIDE_5, GPIO.OUT)
-GPIO.setup(MOTION_SENSOR, GPIO.IN)
+GPIO.setup(LInside, GPIO.OUT)
+GPIO.setup(LR, GPIO.OUT)
+#GPIO.setup(LG, GPIO.OUT)
+#GPIO.setup(LB, GPIO.OUT)
+GPIO.setup(LW, GPIO.OUT)
+GPIO.setup(DOOR_SENSOR, GPIO.IN)
+
+#LRpwm = GPIO.PWM(LR, 100)
+#LGpwm = GPIO.PWM(LG, 100)
+#LBpwm = GPIO.PWM(LB, 100)
+#LWpwm = GPIO.PWM(LW, 100)
+
 
 #===========================================================================================
 #vars
 
 SAFE_OPEN = False
 TIMER = 0
-MOTION_DETECTED = True
 OPEN_TIME = 0
-OPEN_TIME_MAX = 60
+OPEN_TIME_MAX = 10
 
-LIGHTS_OUTSIDE = [LIGHTS_OUTSIDE_1,LIGHTS_OUTSIDE_2,LIGHTS_OUTSIDE_3,LIGHTS_OUTSIDE_4,LIGHTS_OUTSIDE_5]
-LIGHTS_OUTSIDE_ON = [True,True,True,True,True]
+CurrentColor = LG
+CurrentMode = "Up"
+Delta = 0
+
 
 #===========================================================================================
 #functions
 
-def CheckMotion():
-    if GPIO.input(MOTION_SENSOR):
+def CheckSensor():
+    if GPIO.input(DOOR_SENSOR):
         return True
     else:
         return False
 
 def LightsInsideOn():
-    GPIO.output(LIGHTS_INSIDE, GPIO.HIGH)
+    GPIO.output(LInside, GPIO.HIGH)
 
 def LightsInsideOff():
-    GPIO.output(LIGHTS_INSIDE, GPIO.LOW)
+    GPIO.output(LInside, GPIO.LOW)
+
+def LightsOutsideRed():
+    pwm.hardware_PWM(LB, 500000, 0)
+    pwm.hardware_PWM(LG, 500000, 0)
+    
+    GPIO.output(LR, GPIO.HIGH)
 
 def LightsOutsideCycle():
-    global LIGHTS_OUTSIDE
-    global LIGHTS_OUTSIDE_ON
-    for index, light in enumerate(LIGHTS_OUTSIDE):
-        if LIGHTS_OUTSIDE_ON[index] == True:
-            GPIO.output(LIGHTS_OUTSIDE[index], GPIO.HIGH)
-        else:
-            GPIO.output(LIGHTS_OUTSIDE[index], GPIO.LOW)
+    global CurrentColor
+    global CurrentMode
+    global Delta
+
+    print(CurrentColor)
+    print(Delta)
+
+    GPIO.output(LR, GPIO.LOW)
+    
+    if CurrentColor == LG:
+        if CurrentMode == "Up":
+            Delta = Delta + 2500
+            if (Delta % 500000) == 0:
+                CurrentMode = "Down"
+        elif CurrentMode == "Down":
+            Delta = Delta - 2500
+            if (Delta == 0):
+                CurrentMode = "Up"
+                CurrentColor = LB
+        pwm.hardware_PWM(LG, 500000, Delta)
+
+    elif CurrentColor == LB:
+        if CurrentMode == "Up":
+            Delta = Delta + 2500
+            if (Delta % 500000) == 0:
+                CurrentMode = "Down"
+        elif CurrentMode == "Down":
+            Delta = Delta - 2500
+            if (Delta == 0):
+                CurrentMode = "Up"
+                CurrentColor = LG
+        pwm.hardware_PWM(LB, 500000, Delta)
+
 
 def TextCell():
     message = "MSG: GUNSAFE OPEN" + str(datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d %H:%M:%S'))
@@ -95,15 +133,16 @@ def Log():
 
 while True:
 
-    if CheckMotion():
-        print("motion detected")
+    if CheckSensor():
+        print("door open detected")
+        OPEN_TIME = 0
         if SAFE_OPEN == False:
             print("sending text")
             #TextCell()
-        SAFE_OPEN = True
-        LightsInsideOn()
-        OPEN_TIME = 0
-
+            SAFE_OPEN = True
+            LightsInsideOn()
+            LightsOutsideRed()
+            
     if SAFE_OPEN:
         OPEN_TIME = OPEN_TIME + 1
         if OPEN_TIME > OPEN_TIME_MAX:
@@ -112,13 +151,12 @@ while True:
             LightsInsideOff()
             OPEN_TIME = 0
 
-    if TIMER % 60 == 0:
-        print("cycling outside lights")
-        TIMER = 0
+    if not SAFE_OPEN:      
         LightsOutsideCycle()
-
-    Log()
-    TIMER = TIMER + 1
-    time.sleep(1)
+            
+    #TIMER = TIMER + 1
+    #if (TIMER % 100):
+    #    Log()
+    time.sleep(.25)
     
     
