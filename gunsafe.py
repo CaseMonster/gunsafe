@@ -21,8 +21,8 @@ DOOR_SENSOR = 40
 LInside = 38
 
 LR = 35
-LG = 12 #GPIO not pin number
-LB = 13 #GPIO not pin number
+LG = 12 #GPIO not pin number [32]
+LB = 13 #GPIO not pin number [33]
 LW = 37
 
 GPIO.setmode(GPIO.BOARD)
@@ -158,5 +158,3 @@ while True:
     #if (TIMER % 100):
     #    Log()
     time.sleep(.25)
-    
-    
