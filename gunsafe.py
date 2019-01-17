@@ -2,42 +2,25 @@
 #init
 
 import RPi.GPIO as GPIO
-import pigpio
 import time
 import datetime
 import os
 import random
 import smtplib
 
-pwm = pigpio.pi()
-
 GPIO.setwarnings(False)
 
 #===========================================================================================
 #pin setup
 
-DOOR_SENSOR = 40
-
-LInside = 38
-
-LR = 35
-LG = 12 #GPIO not pin number [32]
-LB = 13 #GPIO not pin number [33]
-LW = 37
+SENSOR = 40
+LIGHTS_OUTSIDE = 36
+LIGHTS_INSIDE = 38
 
 GPIO.setmode(GPIO.BOARD)
-GPIO.setup(LInside, GPIO.OUT)
-GPIO.setup(LR, GPIO.OUT)
-#GPIO.setup(LG, GPIO.OUT)
-#GPIO.setup(LB, GPIO.OUT)
-GPIO.setup(LW, GPIO.OUT)
-GPIO.setup(DOOR_SENSOR, GPIO.IN)
-
-#LRpwm = GPIO.PWM(LR, 100)
-#LGpwm = GPIO.PWM(LG, 100)
-#LBpwm = GPIO.PWM(LB, 100)
-#LWpwm = GPIO.PWM(LW, 100)
-
+GPIO.setup(LIGHTS_OUTSIDE, GPIO.OUT)
+GPIO.setup(LIGHTS_INSIDE, GPIO.OUT)
+GPIO.setup(SENSOR, GPIO.IN)
 
 #===========================================================================================
 #vars
@@ -47,67 +30,16 @@ TIMER = 0
 OPEN_TIME = 0
 OPEN_TIME_MAX = 10
 
-CurrentColor = LG
-CurrentMode = "Up"
-Delta = 0
-
-
 #===========================================================================================
 #functions
 
 def CheckSensor():
-    if GPIO.input(DOOR_SENSOR):
+    return False  #broken sensor work around
+    if GPIO.input(SENSOR):
         return True
     else:
         return False
-
-def LightsInsideOn():
-    GPIO.output(LInside, GPIO.HIGH)
-
-def LightsInsideOff():
-    GPIO.output(LInside, GPIO.LOW)
-
-def LightsOutsideRed():
-    pwm.hardware_PWM(LB, 500000, 0)
-    pwm.hardware_PWM(LG, 500000, 0)
     
-    GPIO.output(LR, GPIO.HIGH)
-
-def LightsOutsideCycle():
-    global CurrentColor
-    global CurrentMode
-    global Delta
-
-    print(CurrentColor)
-    print(Delta)
-
-    GPIO.output(LR, GPIO.LOW)
-    
-    if CurrentColor == LG:
-        if CurrentMode == "Up":
-            Delta = Delta + 2500
-            if (Delta % 500000) == 0:
-                CurrentMode = "Down"
-        elif CurrentMode == "Down":
-            Delta = Delta - 2500
-            if (Delta == 0):
-                CurrentMode = "Up"
-                CurrentColor = LB
-        pwm.hardware_PWM(LG, 500000, Delta)
-
-    elif CurrentColor == LB:
-        if CurrentMode == "Up":
-            Delta = Delta + 2500
-            if (Delta % 500000) == 0:
-                CurrentMode = "Down"
-        elif CurrentMode == "Down":
-            Delta = Delta - 2500
-            if (Delta == 0):
-                CurrentMode = "Up"
-                CurrentColor = LG
-        pwm.hardware_PWM(LB, 500000, Delta)
-
-
 def TextCell():
     message = "MSG: GUNSAFE OPEN" + str(datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d %H:%M:%S'))
 
@@ -131,6 +63,8 @@ def Log():
 #===========================================================================================
 #main
 
+GPIO.output(LIGHTS_OUTSIDE, GPIO.HIGH)
+
 while True:
 
     if CheckSensor():
@@ -140,21 +74,24 @@ while True:
             print("sending text")
             #TextCell()
             SAFE_OPEN = True
-            LightsInsideOn()
-            LightsOutsideRed()
-            
+            GPIO.output(LIGHTS_INSIDE, GPIO.HIGH)
+
     if SAFE_OPEN:
         OPEN_TIME = OPEN_TIME + 1
         if OPEN_TIME > OPEN_TIME_MAX:
             print("lights out")
             SAFE_OPEN = False
-            LightsInsideOff()
+            GPIO.output(LIGHTS_INSIDE, GPIO.LOW)
             OPEN_TIME = 0
 
-    if not SAFE_OPEN:      
-        LightsOutsideCycle()
-            
-    #TIMER = TIMER + 1
-    #if (TIMER % 100):
-    #    Log()
+    TIMER = TIMER + 1
+    if (TIMER % 100):
+        Log()
+    if (TIMER % 1000):
+        t = datetime.datetime.now()
+        if ((int(t.hour) - 6) % 24) > 6:
+            GPIO.output(LIGHTS_OUTSIDE, GPIO.HIGH)
+        if ((int(t.hour) - 6) % 24) < 7:
+            GPIO.output(LIGHTS_OUTSIDE, GPIO.LOW)
+
     time.sleep(.25)
