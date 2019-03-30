@@ -28,20 +28,14 @@ GPIO.setup(SENSOR, GPIO.IN)
 SAFE_OPEN = False
 TIMER = 0
 OPEN_TIME = 0
-OPEN_TIME_MAX = 10
+OPEN_TIME_MIN = 3
+OPEN_TIME_MAX = 1000
 
 #===========================================================================================
 #functions
-
-def CheckSensor():
-    return False  #broken sensor work around
-    if GPIO.input(SENSOR):
-        return True
-    else:
-        return False
     
 def TextCell():
-    message = "MSG: GUNSAFE OPEN" + str(datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d %H:%M:%S'))
+    message = "GUNSAFE OPEN"
 
     try:
         smtpObj = smtplib.SMTP('smtp.gmail.com',587)
@@ -49,11 +43,10 @@ def TextCell():
         smtpObj.starttls()
         smtpObj.ehlo()
         smtpObj.login('cschneberger.gunsafe@gmail.com', 'kjowzkcawjavtdue')
-        smtpObj.sendmail('cschneberger.gunsafe@gmail.com', '4056948973@txt.att.net', message)
+        smtpObj.sendmail("cschneberger.gunsafe@gmail.com", "4056948973@txt.att.net", message)
         smtpObj.quit()
-        print "email sent"
     except:
-        print "error on sending email"
+        print "error sending email"
 
 def Log():
     t = str(datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d %H:%M:%S'))
@@ -67,31 +60,44 @@ GPIO.output(LIGHTS_OUTSIDE, GPIO.HIGH)
 
 while True:
 
-    if CheckSensor():
-        print("door open detected")
-        OPEN_TIME = 0
-        if SAFE_OPEN == False:
-            print("sending text")
-            #TextCell()
-            SAFE_OPEN = True
-            GPIO.output(LIGHTS_INSIDE, GPIO.HIGH)
-
-    if SAFE_OPEN:
+    if GPIO.input(SENSOR):
         OPEN_TIME = OPEN_TIME + 1
+        if OPEN_TIME > OPEN_TIME_MIN:
+            if SAFE_OPEN == False:
+                print "safe opened"
+                SAFE_OPEN = True
+                Log()
+                print "turning on lights"
+                GPIO.output(LIGHTS_INSIDE, GPIO.HIGH)
+                print "email sent"
+                TextCell()
+            
+    if not GPIO.input(SENSOR):
+        if SAFE_OPEN == True:
+            print "safe closed"
+            print "turning off lights"
+            GPIO.output(LIGHTS_INSIDE, GPIO.LOW)
+        SAFE_OPEN = False
+        OPEN_TIME = 0
+        
+    if SAFE_OPEN == True:
         if OPEN_TIME > OPEN_TIME_MAX:
-            print("lights out")
+            print "door opened for too long"
             SAFE_OPEN = False
+            print "turning off lights"
             GPIO.output(LIGHTS_INSIDE, GPIO.LOW)
             OPEN_TIME = 0
 
     TIMER = TIMER + 1
-    if (TIMER % 100):
+    if (TIMER % 100) == 0:
         Log()
-    if (TIMER % 1000):
+    if (TIMER % 1000) == 0:
         t = datetime.datetime.now()
-        if ((int(t.hour) - 6) % 24) > 6:
+        if ((int(t.hour) - 5) % 24) > 6:
+            print "daytime"
             GPIO.output(LIGHTS_OUTSIDE, GPIO.HIGH)
-        if ((int(t.hour) - 6) % 24) < 7:
+        if ((int(t.hour) - 5) % 24) < 7:
+            print "nighttime"
             GPIO.output(LIGHTS_OUTSIDE, GPIO.LOW)
 
     time.sleep(.25)
