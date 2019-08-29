@@ -49,7 +49,7 @@ def TextCell():
         print "error sending email"
 
 def Log():
-    t = str(datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d %H:%M:%S'))
+    t = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     s = str(t + "\tSAFE_OPEN:" + str(SAFE_OPEN) + "\tOPEN_TIME: " + str(OPEN_TIME) + "\tTIMER:" + str(TIMER))
     print(s)
 
@@ -93,10 +93,11 @@ while True:
         Log()
     if (TIMER % 1000) == 0:
         t = datetime.datetime.now()
-        if ((int(t.hour) - 5) % 24) > 6:
+        print (t.hour)
+        if (t.hour > 6) and (t.hour < 23):
             print "daytime"
             GPIO.output(LIGHTS_OUTSIDE, GPIO.HIGH)
-        if ((int(t.hour) - 5) % 24) < 7:
+        if (t.hour < 7) or (t.hour > 22):
             print "nighttime"
             GPIO.output(LIGHTS_OUTSIDE, GPIO.LOW)
 
