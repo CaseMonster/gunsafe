@@ -93,7 +93,6 @@ while True:
         Log()
     if (TIMER % 1000) == 0:
         t = datetime.datetime.now()
-        print (t.hour)
         if (t.hour > 6) and (t.hour < 23):
             print "daytime"
             GPIO.output(LIGHTS_OUTSIDE, GPIO.HIGH)
